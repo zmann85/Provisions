@@ -1,5 +1,9 @@
 # Provisions
 
+## v1.5.2
+- Fixed: the bar and macros went empty after a reload on a flight path (or while stunned, feared etc.). They now keep their items, and refresh when you land.
+- Items you could use once stay on the bar for the session, so a temporary "can't use that now" from the game no longer empties it.
+
 ## v1.5.1
 - Fixed: food (or other items) sometimes missing from the bar and macros after logging in or switching characters, until your bags changed. Items whose tooltip text loads late are now picked up as soon as it arrives.
 - Fixed: the bar and macros went empty while you were dead. They now keep showing what you'll use once you're back.
