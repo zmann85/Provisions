@@ -1,11 +1,15 @@
-# Push a tag like v1.6 and this builds the zip, makes a GitHub release
-# and uploads it to CurseForge (and Wago, once a Wago ID/token is set).
+# Releases are driven by CHANGELOG.md: when a push to main changes it and its
+# first "## vX.Y" heading names a version that has no tag yet, this workflow
+# tags that commit, builds the zip, makes a GitHub release and uploads it to
+# CurseForge. Versions containing "beta"/"alpha" upload as Beta/Alpha files.
+# Pushing a tag like v1.6 by hand also works.
 name: Package and release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+    paths: [CHANGELOG.md]
+    tags: ["v*"]
 
 permissions:
   contents: write
@@ -22,4 +26,26 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: BigWigsMods/packager@v2
+      - name: Tag new version from CHANGELOG.md
+        id: ver
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          v=$(grep -m1 -oP '^##\s+\Kv[0-9][^\s]*' CHANGELOG.md || true)
+          if [ -z "$v" ]; then
+            echo "No '## vX.Y' heading in CHANGELOG.md, nothing to release"
+            echo "release=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git rev-parse -q --verify "refs/tags/$v" >/dev/null; then
+            echo "$v is already released"
+            echo "release=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          git tag "$v"
+          git push origin "refs/tags/$v"
+          echo "Tagged $v"
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
+      - name: Package and upload
+        if: steps.ver.outputs.release == 'true'
+        uses: BigWigsMods/packager@v2
