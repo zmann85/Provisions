@@ -220,13 +220,23 @@ end
 
 local infoCache = {}    -- [itemID] = info table, or false if not relevant
 local pendingSince = {} -- [itemID] = when its data was first found incomplete
-local GIVE_UP_AFTER = 60  -- seconds; then treat the item as irrelevant (stops endless rescans)
+local gaveUp = {}       -- [itemID] = true: stopped the fast retries, still re-checked on every scan
+local GIVE_UP_AFTER = 60  -- seconds of fast retries (every 2 s) before falling back to normal scans
 
 local function notReady(itemID)
     local now = GetTime()
     pendingSince[itemID] = pendingSince[itemID] or now
-    if now - pendingSince[itemID] > GIVE_UP_AFTER then infoCache[itemID] = false; return end
-    if C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(itemID) end
+    -- The item's "Use:" text comes from its spell, which can load late (or only when you hover
+    -- the item). Ask for both; SPELL_TEXT_UPDATE / ITEM_DATA_LOAD_RESULT then trigger a rescan.
+    if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, itemID) end
+    local getSpell = (C_Item and C_Item.GetItemSpell) or GetItemSpell
+    local spellID = getSpell and select(2, getSpell(itemID))
+    if spellID and C_Spell and C_Spell.RequestLoadSpellData then pcall(C_Spell.RequestLoadSpellData, spellID) end
+    if now - pendingSince[itemID] > GIVE_UP_AFTER then
+        -- never write the item off: it is parsed again on the next bag change or when its text loads
+        gaveUp[itemID] = true
+        return
+    end
     return nil, nil, nil, true
 end
 
@@ -253,6 +263,7 @@ local function classify(bag, slot, itemID)
         if info == "later" then return end -- re-checked by the extra passes after login
         if info then info.minLevel = minLevel or 0 end
         infoCache[itemID] = info
+        pendingSince[itemID], gaveUp[itemID] = nil, nil
         cached = info
     end
     if not cached then return end
@@ -421,8 +432,10 @@ f:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_REGEN_ENABLED" then
         if pending then queueUpdate() end
         safeBarRefresh() -- applies any layout changes that had to wait for combat to end
-    elseif event == "GET_ITEM_INFO_RECEIVED" or event == "ITEM_DATA_LOAD_RESULT" then
-        if waitingForData then queueUpdate() end
+    elseif event == "GET_ITEM_INFO_RECEIVED" or event == "ITEM_DATA_LOAD_RESULT"
+        or event == "SPELL_TEXT_UPDATE" or event == "SPELL_DATA_LOAD_RESULT" then
+        -- rescan while any item in the bags still lacks its text (cheap: throttled, cache hits otherwise)
+        if waitingForData or next(pendingSince) then queueUpdate() end
     elseif event == "PLAYER_ENTERING_WORLD" then
         retries = 0
         settleStart = GetTime()
@@ -436,7 +449,8 @@ f:SetScript("OnEvent", function(_, event)
     end
 end)
 for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "BAG_UPDATE_DELAYED", "PLAYER_LEVEL_UP", "PLAYER_REGEN_ENABLED",
-                     "SKILL_LINES_CHANGED", "GET_ITEM_INFO_RECEIVED", "ITEM_DATA_LOAD_RESULT" }) do
+                     "SKILL_LINES_CHANGED", "GET_ITEM_INFO_RECEIVED", "ITEM_DATA_LOAD_RESULT",
+                     "SPELL_TEXT_UPDATE", "SPELL_DATA_LOAD_RESULT" }) do
     pcall(f.RegisterEvent, f, e)
 end
 
@@ -1656,6 +1670,38 @@ SlashCmdList.PROVISIONS = function(input)
     if cmd == "reset" then
         if InCombatLockdown() then print(P .. "reset is only possible outside combat"); return end
         StaticPopup_Show("PROVISIONS_RESET")
+        return
+    end
+    if cmd == "debug" then
+        -- one line per item in your bags: what Provisions thinks it is
+        print(P .. "items in your bags (level " .. UnitLevel("player") .. ", mana " .. tostring(usesMana()) .. "):")
+        local seen = {}
+        for bag = 0, (NUM_BAG_SLOTS or 4) do
+            for slot = 1, (bagSlots(bag) or 0) do
+                local id = bagItem(bag, slot)
+                if id and not seen[id] then
+                    seen[id] = true
+                    local name, _, _, _, minLevel, _, _, _, _, _, _, classID, subClassID = GetItemInfo(id)
+                    local c = infoCache[id]
+                    local state
+                    if c then
+                        state = string.format("%s h%d m%d%s%s", c.kind, c.health or 0, c.mana or 0,
+                            c.conjured and " conjured" or "", c.buff and " buff" or "")
+                    elseif c == false then state = "not relevant"
+                    elseif gaveUp[id] then state = "text never loaded"
+                    elseif pendingSince[id] then state = "waiting for text"
+                    else state = "not checked" end
+                    local hasUse = false
+                    for _, line in ipairs(tooltipLines(bag, slot)) do if line:find("^Use:") then hasUse = true end end
+                    local usable = (not IsUsableItem) or IsUsableItem(id)
+                    if classID == 0 or c then
+                        print(string.format("  %s [%d] class %s/%s lvl %s: %s, Use-line %s, usable %s",
+                            name or "?", id, tostring(classID), tostring(subClassID), tostring(minLevel),
+                            state, hasUse and "yes" or "NO", tostring(usable)))
+                    end
+                end
+            end
+        end
         return
     end
     if cmd == "order" then
