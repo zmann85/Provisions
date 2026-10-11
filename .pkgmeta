@@ -1,0 +1,16 @@
+package-as: Provisions
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - README.md
+  - CURSEFORGE.md
+  - LICENSE
+
+embedded-libraries:
+  - libstub
+  - callbackhandler
+  - libdatabroker-1-1
+  - libdbicon-1-0
