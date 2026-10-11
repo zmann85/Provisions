@@ -8,6 +8,7 @@ ignore:
   - README.md
   - CURSEFORGE.md
   - LICENSE
+  - logo.svg
 
 embedded-libraries:
   - libstub
