@@ -5,7 +5,7 @@ See [CURSEFORGE.md](CURSEFORGE.md) for the full description and [CHANGELOG.md](C
 
 ## Releasing
 1. Update `CHANGELOG.md`.
-2. Commit, then tag and push: `git tag v1.6 && git push --tags`
-3. GitHub Actions packages the addon and uploads it to CurseForge.
+2. Put the new version as the first `## v1.6` heading in `CHANGELOG.md`, commit and push to main.
+3. GitHub Actions tags the commit, packages the addon and uploads it to CurseForge.
 
 Needs the repository secret `CF_API_KEY`. CurseForge project: https://www.curseforge.com/projects/1738354
