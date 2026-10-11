@@ -7,7 +7,7 @@
 --   Healthstone  best healthstone (own cooldown, separate from potions)
 -- Order: strongest first by default; "/prov order potions low" uses the weakest first
 -- (groups: food, potions, bandage, healthstone).
--- Put them on your bars (open /macro, General tab). They're shared between characters;
+-- Drag them onto your bars from the settings window (/prov, Item order tab). They are shared between characters;
 -- each character rewrites them for its own bags when it logs in.
 -- Addons may not use items themselves, so we only rewrite the macro text (allowed out of combat).
 
@@ -393,7 +393,7 @@ local function update()
         if setMacro(m[1], m[2], m[3]) then created[#created + 1] = m[1] end
     end
     if #created > 0 then
-        print("|cff33ff99Provisions|r: created macro(s) " .. table.concat(created, ", ") .. ". Open /macro, General tab, and drag them to your bars.")
+        print("|cff33ff99Provisions|r: created macro(s) " .. table.concat(created, ", ") .. ". Type /prov and drag them from the Item order tab onto your bars.")
     end
     if uncached then
         retries = retries + 1
