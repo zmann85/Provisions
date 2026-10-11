@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: Provisions
+## Notes: One-button macros and an item bar for your best (or weakest) food, drink, potions, bandages and healthstones.
+## Author: Ghaan
+## Version: @project-version@
+## IconTexture: Interface\Icons\INV_Misc_Food_11
+## SavedVariables: ProvisionsDB
+## SavedVariablesPerCharacter: ProvisionsCharDB
+## X-License: MIT
+
+libs\LibStub\LibStub.lua
+libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
+Provisions.lua
