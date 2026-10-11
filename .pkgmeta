@@ -6,7 +6,7 @@ manual-changelog:
 
 ignore:
   - README.md
-  - CURSEFORGE.md
+  - CURSEFORGE.html
   - LICENSE
   - logo.svg
 

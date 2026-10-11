@@ -1,7 +1,7 @@
 # Provisions
 
 WoW Forever addon: one-button macros and an item bar for your best food, drink, potions, bandages and healthstones.
-See [CURSEFORGE.md](CURSEFORGE.md) for the full description and [CHANGELOG.md](CHANGELOG.md) for changes.
+See [CURSEFORGE.html](CURSEFORGE.html) for the CurseForge description (paste into the editor's source view) and [CHANGELOG.md](CHANGELOG.md) for changes.
 
 ## Releasing
 1. Update `CHANGELOG.md`.
