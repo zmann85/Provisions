@@ -30,22 +30,28 @@ jobs:
         id: ver
         run: |
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            echo "release=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"; exit 0
           fi
           v=$(grep -m1 -oP '^##\s+\Kv[0-9][^\s]*' CHANGELOG.md || true)
           if [ -z "$v" ]; then
-            echo "No '## vX.Y' heading in CHANGELOG.md, nothing to release"
-            echo "release=false" >> "$GITHUB_OUTPUT"; exit 0
+            echo "No '## vX.Y' heading in CHANGELOG.md, nothing to release"; exit 0
           fi
           if git rev-parse -q --verify "refs/tags/$v" >/dev/null; then
-            echo "$v is already released"
-            echo "release=false" >> "$GITHUB_OUTPUT"; exit 0
+            echo "$v is already released"; exit 0
           fi
           git tag "$v"
           git push origin "refs/tags/$v"
           echo "Tagged $v"
-          echo "release=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$v" >> "$GITHUB_OUTPUT"
 
+      # Run the packager script directly and present the build as a tag build:
+      # a tag pushed by this workflow never starts a run of its own, and the
+      # packager skips branch pushes whose commit already has a tag.
       - name: Package and upload
-        if: steps.ver.outputs.release == 'true'
-        uses: BigWigsMods/packager@v2
+        if: steps.ver.outputs.tag != ''
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          git clone -q --depth 1 -b v2 https://github.com/BigWigsMods/packager "$RUNNER_TEMP/packager"
+          GITHUB_EVENT_NAME=push GITHUB_REF="refs/tags/$TAG" GITHUB_REF_NAME="$TAG" GITHUB_REF_TYPE=tag \
+            bash "$RUNNER_TEMP/packager/release.sh"

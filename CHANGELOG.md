@@ -1,6 +1,6 @@
 # Provisions
 
-## v1.5-beta1
+## v1.5-beta2
 - Test of the automatic release (same as v1.5).
 
 ## v1.5
