@@ -8,4 +8,4 @@ See [CURSEFORGE.md](CURSEFORGE.md) for the full description and [CHANGELOG.md](C
 2. Commit, then tag and push: `git tag v1.6 && git push --tags`
 3. GitHub Actions packages the addon and uploads it to CurseForge.
 
-Needs the repository secret `CF_API_KEY` and `## X-Curse-Project-ID:` in `Provisions.toc`.
+Needs the repository secret `CF_API_KEY`. CurseForge project: https://www.curseforge.com/projects/1738354
