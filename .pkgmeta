@@ -9,6 +9,7 @@ ignore:
   - CURSEFORGE.html
   - LICENSE
   - logo.svg
+  - media
 
 embedded-libraries:
   - libstub
