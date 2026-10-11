@@ -301,6 +301,9 @@ local function findBest()
     local best = {}
     local cands = {}
     local usable = {} -- IsUsableItem asked once per distinct item per scan, not per bag slot
+    -- While dead or a ghost the game calls every item unusable: skip that check then,
+    -- so the bar and macros keep showing what you'll use once you're back.
+    local dead = UnitIsDeadOrGhost and UnitIsDeadOrGhost("player")
     local uncached = false
     for bag = 0, (NUM_BAG_SLOTS or 4) do
         for slot = 1, (bagSlots(bag) or 0) do
@@ -310,7 +313,7 @@ local function findBest()
                 if kind == "food" and buff and skipBuffFood() then kind = nil end -- keep buff food for the buff
                 local conj = (kind == "food" and conjured and conjuredFirst()) or false
                 if notCached then uncached = true end
-                if kind and usable[itemID] == nil then usable[itemID] = (not IsUsableItem) or IsUsableItem(itemID) and true or false end
+                if kind and usable[itemID] == nil then usable[itemID] = dead or (not IsUsableItem) or IsUsableItem(itemID) and true or false end
                 if kind and usable[itemID] then
                     local hKey = (kind == "food" and "food") or (kind == "potion" and "hpot") or (kind == "stone" and "stone") or "bandage"
                     local mKey = (kind == "food" and "drink") or (kind == "potion" and "mpot") or nil
@@ -449,6 +452,7 @@ f:SetScript("OnEvent", function(_, event)
     end
 end)
 for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "BAG_UPDATE_DELAYED", "PLAYER_LEVEL_UP", "PLAYER_REGEN_ENABLED",
+                     "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST",
                      "SKILL_LINES_CHANGED", "GET_ITEM_INFO_RECEIVED", "ITEM_DATA_LOAD_RESULT",
                      "SPELL_TEXT_UPDATE", "SPELL_DATA_LOAD_RESULT" }) do
     pcall(f.RegisterEvent, f, e)
