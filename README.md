@@ -8,21 +8,21 @@ A WoW Forever addon.</p>
 
 Provisions keeps a few general macros pointed at the right consumable. When you loot new food, level up or run out of a stack, **the buttons update themselves**. Put them on your bars once and never think about it again.
 
-## 📦 Install
+## Install
 1. Open the [latest release](https://github.com/zmann85/Provisions/releases/latest) and download the `Provisions-…zip` file under **Assets**.
 2. Unzip it into `World of Warcraft\_classic_beta_\Interface\AddOns\` (you should end up with an `AddOns\Provisions` folder).
 3. Start the game or type `/reload`.
 
 To update, repeat this and replace the old folder. Your settings are kept.
 
-## 🚀 Getting started
+## Getting started
 1. Log in. Provisions creates its buttons automatically.
 2. Type `/prov` or click the **bread icon** on your minimap.
 3. On the **Item order** tab, **drag the buttons onto your action bars**. Done.
 
 <p align="center"><img src="media/settings-item-order.png" width="420" alt="Item order tab"></p>
 
-## 🍞 The buttons
+## The buttons
 | Button | Uses |
 |---|---|
 | **EatDrink** | Best food and drink in one press, or as separate **Eat** and **Drink** buttons |
@@ -37,7 +37,7 @@ To update, repeat this and replace the old folder. Your settings are kept.
 - **Skips buff food**, so your Well Fed food isn't wasted on regen
 - Characters without mana **never get drinks**
 
-## 🧪 The item bar
+## The item bar
 A small bar shows what each button would use and how many you have left.
 - **Click** an icon to use the item, **right-click** to pick a specific item for that slot
 - Choose which item types appear, plus icon size and grow direction
@@ -45,7 +45,7 @@ A small bar shows what each button would use and how many you have left.
 
 <p align="center"><img src="media/item-bar.png" width="460" alt="Item bar with the right-click list"></p>
 
-## ⚙️ Settings
+## Settings
 Everything is in one window: `/prov` or the minimap button.
 - **Item order**: your buttons to drag onto your bars, and strongest or weakest first per group
 - **Options**: one or two food & drink buttons, conjured first, skip buff food
@@ -64,10 +64,10 @@ Options and the bar layout are shared by all your characters. Item order, bar it
 | `/prov reset` | Factory reset |
 | `/prov debug` | List your consumables and how Provisions sees them (for bug reports) |
 
-## ⚡ Lightweight
+## Lightweight
 It only scans when your bags change and never reads the combat log. Nothing it does in combat can get blocked.
 
-## 🐞 Bugs & ideas
+## Bugs & ideas
 Open an [issue](https://github.com/zmann85/Provisions/issues), or tell Ghaan in game. A screenshot of `/prov debug` helps a lot.
 
 ---
