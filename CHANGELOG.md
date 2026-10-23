@@ -1,6 +1,6 @@
 # Provisions
 
-## Unreleased
+## v1.6
 - Works on game clients in every language. Provisions now comes with a table of the game's food, drink, potions, bandages and healthstones (read from the game itself), so it no longer needs English tooltip text. An item that isn't in the table is still read from its tooltip, which only works on an English client.
 - Right after logging in, the macros and the bar are ready at once instead of after the tooltips have loaded.
 
