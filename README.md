@@ -8,7 +8,7 @@ A WoW Forever addon.</p>
 
 Provisions keeps a few general macros pointed at the right consumable. When you loot new food, level up or run out of a stack, **the buttons update themselves**. Put them on your bars once and never think about it again.
 
-**English game client only:** Provisions tells what an item does from its tooltip text ("Use: Restores … health"), and it reads that text in English.
+**Any game language:** Provisions knows the game's food, drink, potions, bandages and healthstones by their item ID, so it works whatever language your game is in. (An item added to the game later is only recognized on an English client, until Provisions' table has it.)
 
 ## Install
 1. Open the [latest release](https://github.com/zmann85/Provisions/releases/latest) and download the `Provisions-…zip` file under **Assets**.

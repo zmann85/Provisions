@@ -1,8 +1,8 @@
 # Provisions
 
 ## Unreleased
-- Bandages and the "Use:" check of a tooltip work on game clients in other languages: First Aid is found by its name in the client's language, and "Use:" is the game's own text.
-- Provisions can take what an item is from a table that comes with it (by item ID) instead of its tooltip.
+- Works on game clients in every language. Provisions now comes with a table of the game's food, drink, potions, bandages and healthstones (read from the game itself), so it no longer needs English tooltip text. An item that isn't in the table is still read from its tooltip, which only works on an English client.
+- Right after logging in, the macros and the bar are ready at once instead of after the tooltips have loaded.
 
 ## v1.5.3
 - Fixed: logging in or reloading during a fight with the clickable bar on gave "Interface action failed because of an AddOn" and a bar that didn't work until the fight ended. The bar now appears once the fight is over.
