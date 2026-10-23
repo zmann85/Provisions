@@ -1,5 +1,9 @@
 # Provisions
 
+## Unreleased
+- Bandages and the "Use:" check of a tooltip work on game clients in other languages: First Aid is found by its name in the client's language, and "Use:" is the game's own text.
+- Provisions can take what an item is from a table that comes with it (by item ID) instead of its tooltip.
+
 ## v1.5.3
 - Fixed: logging in or reloading during a fight with the clickable bar on gave "Interface action failed because of an AddOn" and a bar that didn't work until the fight ended. The bar now appears once the fight is over.
 - Fixed: after a fresh login, item or spell data loading anywhere in the game (tooltips, vendors, the auction house, other addons) could make Provisions re-check your bags up to twice a second for the rest of the session. It now only re-checks when the item it's waiting for loads.

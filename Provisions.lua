@@ -11,7 +11,8 @@
 -- each character rewrites them for its own bags when it logs in.
 -- Addons may not use items themselves, so we only rewrite the macro text (allowed out of combat).
 
-local ADDON = ...
+local ADDON, NS = ...
+NS = NS or {}
 local MACRO_ICON = 134400 -- question mark; #showtooltip swaps in the item icon
 
 local GetItemInfo = C_Item and C_Item.GetItemInfo or _G.GetItemInfo
@@ -113,6 +114,10 @@ end
 
 local function num(s) return s and tonumber((s:gsub(",", ""))) end
 
+-- The tooltip's "Use:" in the client's language (the game's own string)
+local USE = (type(ITEM_SPELL_TRIGGER_ONUSE) == "string" and ITEM_SPELL_TRIGGER_ONUSE ~= "") and ITEM_SPELL_TRIGGER_ONUSE or "Use:"
+local function isUse(line) return line:sub(1, #USE) == USE or line:sub(1, 4) == "Use:" end
+
 -- Amounts restored on one tooltip line ("70 to 90 health" counts as 90)
 local function amounts(line)
     local h = num(line:match("([%d,]+) health"))
@@ -123,11 +128,17 @@ local function amounts(line)
 end
 
 -- First Aid skill rank (0 if not learned / unknown)
+local firstAidName
 local function firstAidRank()
     if not GetNumSkillLines then return nil end
+    if not firstAidName then
+        -- (the profession's name in the client's language: its Apprentice spell, 3273)
+        local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(3273)
+        firstAidName = (type(info) == "table" and info.name) or (GetSpellInfo and GetSpellInfo(3273)) or "First Aid"
+    end
     for i = 1, GetNumSkillLines() do
         local name, isHeader, _, rank = GetSkillLineInfo(i)
-        if not isHeader and name == "First Aid" then return rank or 0 end
+        if not isHeader and (name == firstAidName or name == "First Aid") then return rank or 0 end
     end
     return 0
 end
@@ -136,14 +147,13 @@ end
 -- or nil if not relevant; third value true if item data isn't loaded yet.
 -- Reads an item's tooltip once and returns what it is (tooltips of an item never change).
 -- Returns an info table, false if irrelevant, or "pending" if the game hasn't loaded the text yet.
-local function parseItem(bag, slot, itemID, itemName, classID, subClassID)
-    local lines = tooltipLines(bag, slot)
+local function parseLines(lines, itemID, itemName, classID, subClassID)
     local consumable = (classID == 0)
     -- Right after starting the game, tooltips can come back without their "Use:" text
     -- for a few seconds. Treat that as "not loaded yet" instead of "not food".
     local hasUse, seated = false, false
     for _, line in ipairs(lines) do
-        if line:find("^Use:") then hasUse = true end
+        if isUse(line) then hasUse = true end
         if line:find("remain seated while") then seated = true end -- "...while eating/drinking"
     end
     if not hasUse then
@@ -217,6 +227,26 @@ local function parseItem(bag, slot, itemID, itemName, classID, subClassID)
     if health == 0 and mana == 0 then return false end
     return { kind = "potion", health = health, mana = mana }
 end
+local function parseItem(bag, slot, itemID, itemName, classID, subClassID)
+    return parseLines(tooltipLines(bag, slot), itemID, itemName, classID, subClassID)
+end
+
+-- What the consumables are, read once from the English tooltips (ProvisionsItems.lua, NS.ITEMS:
+-- "\n<itemID>=<kind>,<health>,<mana>,<flags>,<First Aid>,<level>"; kind f food/drink, p potion, b bandage,
+-- s healthstone; flags c conjured, w Well Fed): any client language, and no tooltip to wait for. An item that
+-- isn't in it is read from its tooltip (English text).
+local KINDS = { f = "food", p = "potion", b = "bandage", s = "stone" }
+local function shippedInfo(itemID)
+    local s = NS.ITEMS
+    if type(s) ~= "string" or not itemID then return nil end
+    local _, last = s:find("\n" .. itemID .. "=", 1, true)
+    if not last then return nil end
+    local k, h, m, fl, fa, lvl = s:match("^(%a),(%d*),(%d*),(%a*),(%d*),(%d*)", last + 1)
+    if not KINDS[k or ""] then return nil end
+    return { kind = KINDS[k], health = tonumber(h) or 0, mana = tonumber(m) or 0,
+             conjured = fl:find("c", 1, true) ~= nil, buff = fl:find("w", 1, true) ~= nil,
+             skillNeeded = tonumber(fa), minLevel = tonumber(lvl) or 0 }
+end
 
 local infoCache = {}    -- [itemID] = info table, or false if not relevant
 local pendingSince = {} -- [itemID] = when its data was first found incomplete
@@ -244,7 +274,8 @@ local function notReady(itemID)
 end
 
 -- Sorts an item into a category. Returns kind, health, mana, notReady, conjured, buff.
-local function classify(bag, slot, itemID)
+local classify
+function classify(bag, slot, itemID)
     local cached = infoCache[itemID]
     if cached == false then return end
     if cached then -- already known: only the level / First Aid checks can change
@@ -254,6 +285,14 @@ local function classify(bag, slot, itemID)
             if rank and rank < cached.skillNeeded then return end
         end
         return cached.kind, cached.health, cached.mana, nil, cached.conjured, cached.buff
+    end
+    if cached == nil then
+        local known = shippedInfo(itemID)
+        if known then
+            infoCache[itemID] = known
+            pendingSince[itemID], gaveUp[itemID] = nil, nil
+            return classify(bag, slot, itemID)
+        end
     end
     local itemName, _, _, _, minLevel, _, _, _, _, _, _, classID, subClassID = GetItemInfo(itemID)
     if not classID then return notReady(itemID) end
@@ -1710,7 +1749,7 @@ SlashCmdList.PROVISIONS = function(input)
                     elseif pendingSince[id] then state = "waiting for text"
                     else state = "not checked" end
                     local hasUse = false
-                    for _, line in ipairs(tooltipLines(bag, slot)) do if line:find("^Use:") then hasUse = true end end
+                    for _, line in ipairs(tooltipLines(bag, slot)) do if isUse(line) then hasUse = true end end
                     local usable = (not IsUsableItem) or IsUsableItem(id)
                     if classID == 0 or c then
                         print(string.format("  %s [%d] class %s/%s lvl %s: %s, Use-line %s, usable %s",
