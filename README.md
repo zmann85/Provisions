@@ -12,7 +12,7 @@ Provisions keeps a few general macros pointed at the right consumable. When you 
 
 ## Install
 1. Open the [latest release](https://github.com/zmann85/Provisions/releases/latest) and download the `Provisions-…zip` file under **Assets**.
-2. Unzip it into `World of Warcraft\_classic_beta_\Interface\AddOns\` (you should end up with an `AddOns\Provisions` folder).
+2. Unzip it into `World of Warcraft\_forever_\Interface\AddOns\` (you should end up with an `AddOns\Provisions` folder).
 3. Start the game or type `/reload`.
 
 To update, repeat this and replace the old folder. Your settings are kept.
