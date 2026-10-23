@@ -221,16 +221,19 @@ end
 local infoCache = {}    -- [itemID] = info table, or false if not relevant
 local pendingSince = {} -- [itemID] = when its data was first found incomplete
 local gaveUp = {}       -- [itemID] = true: stopped the fast retries, still re-checked on every scan
+local pendingSpell = {} -- [spellID] = itemID
 local GIVE_UP_AFTER = 60  -- seconds of fast retries (every 2 s) before falling back to normal scans
 
 local function notReady(itemID)
     local now = GetTime()
     pendingSince[itemID] = pendingSince[itemID] or now
+    if gaveUp[itemID] then return end -- asked for a minute already: wait for a bag change
     -- The item's "Use:" text comes from its spell, which can load late (or only when you hover
     -- the item). Ask for both; SPELL_TEXT_UPDATE / ITEM_DATA_LOAD_RESULT then trigger a rescan.
     if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, itemID) end
     local getSpell = (C_Item and C_Item.GetItemSpell) or GetItemSpell
     local spellID = getSpell and select(2, getSpell(itemID))
+    if spellID then pendingSpell[spellID] = itemID end
     if spellID and C_Spell and C_Spell.RequestLoadSpellData then pcall(C_Spell.RequestLoadSpellData, spellID) end
     if now - pendingSince[itemID] > GIVE_UP_AFTER then
         -- never write the item off: it is parsed again on the next bag change or when its text loads
@@ -438,14 +441,16 @@ local function queueUpdate()
     C_Timer.After(0.5, function() queued = false; update() end)
 end
 
-f:SetScript("OnEvent", function(_, event)
+f:SetScript("OnEvent", function(_, event, id)
     if event == "PLAYER_REGEN_ENABLED" then
         if pending then queueUpdate() end
         safeBarRefresh() -- applies any layout changes that had to wait for combat to end
-    elseif event == "GET_ITEM_INFO_RECEIVED" or event == "ITEM_DATA_LOAD_RESULT"
-        or event == "SPELL_TEXT_UPDATE" or event == "SPELL_DATA_LOAD_RESULT" then
-        -- rescan while any item in the bags still lacks its text (cheap: throttled, cache hits otherwise)
-        if waitingForData or next(pendingSince) then queueUpdate() end
+    elseif event == "GET_ITEM_INFO_RECEIVED" or event == "ITEM_DATA_LOAD_RESULT" then
+        -- rescan when an item in the bags (or its spell, below) whose text we're still waiting for loads -
+        -- not for every item or spell the game loads for anything else
+        if waitingForData or pendingSince[id] then queueUpdate() end
+    elseif event == "SPELL_TEXT_UPDATE" or event == "SPELL_DATA_LOAD_RESULT" then
+        if waitingForData or pendingSpell[id] then queueUpdate() end
     elseif event == "PLAYER_ENTERING_WORLD" then
         retries = 0
         settleStart = GetTime()
@@ -1252,6 +1257,8 @@ barRefresh = function()
     end
     layoutPending = false
     if not db.shown then if bar then bar:Hide() end return end
+    -- (logged in or reloaded in combat: the clickable buttons can only be made once the fight is over)
+    if InCombatLockdown() and db.clickable and not (bar and bar.sslots) then layoutPending = true; return end
     if not bar then buildBar() end
     local clickable = db.clickable and true or false
     if clickable and not bar.sslots then -- create the clickable buttons (we are out of combat here)
