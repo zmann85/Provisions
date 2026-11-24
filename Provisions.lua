@@ -5,6 +5,8 @@
 --   ManaPot   best mana potion
 --   Bandage   best bandage you have the First Aid skill for (normal game targeting)
 --   Healthstone  best healthstone (own cooldown, separate from potions)
+--   Rune      Demonic Rune / Dark Rune (mana for health, own cooldown; only on classes with mana)
+--   BuffFood  best Well Fed ("Nutritious") food: its stat buff, and in WoW Forever +5% experience from kills
 -- Order: strongest first by default; "/prov order potions low" uses the weakest first
 -- (groups: food, potions, bandage, healthstone).
 -- Drag them onto your bars from the settings window (/prov, Item order tab). They are shared between characters;
@@ -148,6 +150,13 @@ end
 -- Reads an item's tooltip once and returns what it is (tooltips of an item never change).
 -- Returns an info table, false if irrelevant, or "pending" if the game hasn't loaded the text yet.
 local function parseLines(lines, itemID, itemName, classID, subClassID)
+    -- Recipes show the whole tooltip of what they make ("...must remain seated...well fed..."),
+    -- so they'd pass for food. A recipe is never something to eat.
+    local recipeClass = (Enum and Enum.ItemClass and Enum.ItemClass.Recipe) or 9
+    if classID == recipeClass then return false end
+    for _, line in ipairs(lines) do
+        if line:find("Teaches you") then return false end
+    end
     local consumable = (classID == 0)
     -- Right after starting the game, tooltips can come back without their "Use:" text
     -- for a few seconds. Treat that as "not loaded yet" instead of "not food".
@@ -167,6 +176,16 @@ local function parseLines(lines, itemID, itemName, classID, subClassID)
         if spellName or spellID then return "pending" end
         if GetTime() - settleStart < 30 then return "later" end -- just logged in: don't rule it out yet
         return false -- ordinary trade goods / gear: nothing to use
+    end
+
+    -- Runes: "Use: Restores 900 to 1500 mana at the cost of 600 to 1000 life." Checked first: they mention
+    -- life too (so they'd look like a potion), and the game doesn't always file them as consumables.
+    for _, line in ipairs(lines) do
+        if line:find("mana at the cost of") then
+            local lo, hi = line:match("[Rr]estores ([%d,]+) to ([%d,]+) mana")
+            local v = num(hi) or num(lo) or num(line:match("[Rr]estores ([%d,]+) mana")) or 1
+            return { kind = "rune", health = 0, mana = v }
+        end
     end
 
     -- Food & drink: the game's Food & Drink category, or anything you must sit down to eat/drink
@@ -235,7 +254,7 @@ end
 -- "\n<itemID>=<kind>,<health>,<mana>,<flags>,<First Aid>,<level>"; kind f food/drink, p potion, b bandage,
 -- s healthstone; flags c conjured, w Well Fed): any client language, and no tooltip to wait for. An item that
 -- isn't in it is read from its tooltip (English text).
-local KINDS = { f = "food", p = "potion", b = "bandage", s = "stone" }
+local KINDS = { f = "food", p = "potion", b = "bandage", s = "stone", r = "rune" }
 local function shippedInfo(itemID)
     local s = NS.ITEMS
     if type(s) ~= "string" or not itemID then return nil end
@@ -318,7 +337,7 @@ end
 
 -- Pick order per group, set with /prov order <group> <high|low> (saved):
 --   high = strongest first (default), low = weakest first (use up old stock)
-local GROUPS = { food = "food", drink = "food", hpot = "potions", mpot = "potions", bandage = "bandage", stone = "healthstone" }
+local GROUPS = { food = "food", drink = "food", hpot = "potions", mpot = "potions", bandage = "bandage", stone = "healthstone", rune = "rune", bufffood = "bufffood" }
 local function lowFirst(key)
     return ProvisionsCharDB and ProvisionsCharDB.order and ProvisionsCharDB.order[GROUPS[key]] == "low"
 end
@@ -356,21 +375,31 @@ local function findBest()
             local itemID, count = bagItem(bag, slot)
             if itemID then
                 local kind, health, mana, notCached, conjured, buff = classify(bag, slot, itemID)
-                if kind == "food" and buff and skipBuffFood() then kind = nil end -- keep buff food for the buff
+                local isBuffFood = (kind == "food" and buff) and true or false -- Well Fed: stats + XP from kills
+                if isBuffFood and skipBuffFood() then kind = nil end -- keep buff food for the buff
                 local conj = (kind == "food" and conjured and conjuredFirst()) or false
                 if notCached then uncached = true end
-                if kind and usable[itemID] == nil then
+                if (kind or isBuffFood) and usable[itemID] == nil then
                     usable[itemID] = blocked or seenUsable[itemID] or (not IsUsableItem) or IsUsableItem(itemID) and true or false
                     if usable[itemID] and not blocked then seenUsable[itemID] = true end
                 end
+                if isBuffFood and usable[itemID] then
+                    -- the Buff food button: strongest (or weakest) dish by what it restores
+                    local v = math.max(health or 0, mana or 0, 1)
+                    if better(best.bufffood, v, count, lowFirst("bufffood"), false) then best.bufffood = { id = itemID, v = v, c = count, conj = false } end
+                    cands.bufffood = cands.bufffood or {}
+                    cands.bufffood[itemID] = cands.bufffood[itemID] or { id = itemID, v = v, conj = false }
+                end
                 if kind and usable[itemID] then
-                    local hKey = (kind == "food" and "food") or (kind == "potion" and "hpot") or (kind == "stone" and "stone") or "bandage"
-                    local mKey = (kind == "food" and "drink") or (kind == "potion" and "mpot") or nil
-                    if better(best[hKey], health, count, lowFirst(hKey), conj) then best[hKey] = { id = itemID, v = health, c = count, conj = conj } end
+                    -- runes only count for their mana (they cost health)
+                    local hKey = (kind == "food" and "food") or (kind == "potion" and "hpot") or (kind == "stone" and "stone")
+                        or (kind == "bandage" and "bandage") or nil
+                    local mKey = (kind == "food" and "drink") or (kind == "potion" and "mpot") or (kind == "rune" and "rune") or nil
+                    if hKey and better(best[hKey], health, count, lowFirst(hKey), conj) then best[hKey] = { id = itemID, v = health, c = count, conj = conj } end
                     if mKey and better(best[mKey], mana, count, lowFirst(mKey), conj) then best[mKey] = { id = itemID, v = mana, c = count, conj = conj } end
                     -- remember every candidate for the right-click list
-                    for key, v in pairs({ [hKey] = health, [mKey or "_"] = mana }) do
-                        if key ~= "_" and v > 0 then
+                    for key, v in pairs({ [hKey or "_h"] = health, [mKey or "_m"] = mana }) do
+                        if key ~= "_h" and key ~= "_m" and v > 0 then
                             cands[key] = cands[key] or {}
                             cands[key][itemID] = cands[key][itemID] or { id = itemID, v = v, conj = conj }
                         end
@@ -392,7 +421,7 @@ local function findBest()
         end
     end
     lastCands = cands
-    if not usesMana() then best.drink, best.mpot = nil, nil end
+    if not usesMana() then best.drink, best.mpot, best.rune = nil, nil, nil end
     return best, uncached
 end
 
@@ -451,6 +480,8 @@ local function update()
         { "ManaPot", simpleBody(best.mpot, "mana potion") },
         { "Bandage", simpleBody(best.bandage, "bandage") },
         { "Healthstone", simpleBody(best.stone, "healthstone") },
+        { "Rune", simpleBody(best.rune, "rune"), usesMana() }, -- created on classes with mana only
+        { "BuffFood", simpleBody(best.bufffood, "buff food") },
     }
     for _, m in ipairs(macros) do
         if setMacro(m[1], m[2], m[3]) then created[#created + 1] = m[1] end
@@ -518,24 +549,39 @@ local OPTIONS = {
       macros = { { "HealPot", "hpot" }, { "ManaPot", "mpot" } } },
     { group = "bandage",     label = "Bandages",     picks = { "bandage" },       macros = { { "Bandage", "bandage" } } },
     { group = "healthstone", label = "Healthstones", picks = { "stone" },         macros = { { "Healthstone", "stone" } } },
+    { group = "rune",        label = "Runes",        picks = { "rune" },          macros = { { "Rune", "rune" } } },
+    { group = "bufffood",    label = "Buff food",    picks = { "bufffood" },      macros = { { "BuffFood", "bufffood" } } },
     { header = "OPTIONS" },
     { kind = "split",    label = "Food & drink buttons", desc = "One button for both, or separate Eat and Drink buttons" },
     { kind = "conjured", label = "Conjured first",       desc = "Mage food and water is used before anything else, in either order" },
-    { kind = "buff",     label = "Skip buff food",       desc = "Food that makes you Well Fed stays in your bags for the buff" },
+    { kind = "buff",     label = "Skip buff food",       desc = "Food that makes you Well Fed stays in your bags for the buff (eat it with the Buff food button or macro)" },
     { header = "ITEM BAR" },
     { kind = "bar",      label = "Item bar",             desc = "Shows what each button uses and how many are left. Right-click an icon on the bar to pick a specific item." },
-    { kind = "barItems", label = "Show on the bar",      desc = "Only items you actually have are shown. Drink and mana potion only on classes with mana." },
+    { kind = "barItems", label = "Show on the bar",      desc = "Only items you actually have are shown. Drink, mana potion and rune only on classes with mana." },
     { kind = "barSize",  label = "Icon size",            desc = "Size of the icons on the bar" },
     { kind = "barGrow",  label = "Grow direction",       desc = "The bar stays pinned on the side it grows away from" },
     { header = "BAR BEHAVIOUR", sub = 2 }, -- second page of the Item bar tab
     { kind = "barLock",  label = "Position",             desc = "Unlock to drag the bar, then lock it again. Tip: Alt + click on the bar unlocks it too." },
     { kind = "barClickable", label = "Clickable",        desc = "Left-click uses the item. During combat the bar's layout is frozen (game rule)." },
     { kind = "barClick", label = "Click-through when locked", desc = "Clicks go through the bar to the game world (no tooltips). Holding Alt still lets you Alt + click to unlock it." },
+    { kind = "barToggles", label = "Raid bar buttons",   desc = "Two small buttons at the end of the item bar that show or hide the raid bar and the raid stims bar." },
+    { header = "RAID BAR" },
+    { kind = "raidShow",   label = "Raid bar",          desc = "Your own raid buffs (flasks, elixirs, food, juju...), a list per character. Drag an item from your bags onto the bar to add it; right-click an icon for its options." },
+    { kind = "raidGlow",   label = "Glow",              desc = "Missing: pulses orange when you carry the item but its buff isn't on you (in raids). Active: a steady green frame while the buff is up." },
+    { kind = "raidLock",   label = "Position",          desc = "Unlock to drag the bar and drop new items on it, then lock it to use them. Alt + click unlocks it too." },
+    { kind = "raidGrow",   label = "Grow direction",    desc = "Icon size is shared with the item bar (Item bar tab)." },
+    { kind = "raidPreset", label = "Presets",           desc = "Fills this character's raid bar and raid stims bar with a ready-made list. You choose whether to add what's missing or replace your lists." },
+    { header = "RAID STIMS", sub = 2 }, -- second page of the Raid bar tab
+    { kind = "stimsShow",  label = "Raid stims bar",    desc = "Short-use items for certain fights: protection potions, Free Action, Stoneshield... Drag items onto it just like the raid bar." },
+    { kind = "stimsGlow",  label = "Glow",              desc = "Active (default): a steady green frame and the time left while the stim is up. Missing: pulses orange in raids when it isn't." },
+    { kind = "stimsLock",  label = "Position",          desc = "Unlock to drag the bar and drop new items on it, then lock it to use them. Alt + click unlocks it too." },
+    { kind = "stimsGrow",  label = "Grow direction",    desc = "Icon size is shared with the item bar (Item bar tab)." },
 }
 
 local BAR_ITEMS = {
     { "food", "Food" }, { "drink", "Drink" }, { "hpot", "Heal pot" },
-    { "mpot", "Mana pot" }, { "bandage", "Bandage" }, { "stone", "Stone" },
+    { "mpot", "Mana pot" }, { "bandage", "Bandage" }, { "stone", "Stone" }, { "rune", "Rune" },
+    { "bufffood", "Buff food" },
 }
 local function barDB()
     ProvisionsDB = ProvisionsDB or {}
@@ -545,6 +591,7 @@ local function barDB()
     if b.locked == nil then b.locked = false end       -- first install: unlocked, so it can be placed
     if b.clickable == nil then b.clickable = true end
     if b.clickThrough == nil then b.clickThrough = false end
+    if b.toggles == nil then b.toggles = true end
     if b.iconSize == nil then b.iconSize = 32 end
     if b.grow == nil then b.grow = "RIGHT" end
     return b
@@ -608,6 +655,7 @@ local function buildPanel()
     local ICON, ICON_COL = 28, 66             -- macro icons on the left of each row
 
     panel = CreateFrame("Frame", "ProvisionsPanel", UIParent)
+    panel:Hide() -- new frames start shown; togglePanel would otherwise close it on the first click
     panel:SetPoint("CENTER")
     panel:SetFrameStrata("DIALOG")
     panel:SetClampedToScreen(true)
@@ -693,12 +741,11 @@ local function buildPanel()
     end
 
     -- tabs: one per section heading in OPTIONS
-    local TAB_NAMES = { "Item order", "Options", "Item bar" }
-    local SUB_TAB = 3                                  -- the Item bar tab has two pages
-    local SUB_NAMES = { "Appearance", "Behaviour" }
+    local TAB_NAMES = { "Item order", "Options", "Item bar", "Raid bar" }
+    local SUBS = { [3] = { "Appearance", "Behaviour" }, [4] = { "Raid bar", "Raid stims" } } -- tabs with two pages
     local activeTab = (ProvisionsDB and ProvisionsDB.tab) or 1
-    local activeSub = (ProvisionsDB and ProvisionsDB.subTab) or 1
-    if activeTab > #TAB_NAMES then activeTab, activeSub = SUB_TAB, 2 end -- older 4-tab layout
+    local activeSubs = { [3] = (ProvisionsDB and ProvisionsDB.subTab) or 1, [4] = (ProvisionsDB and ProvisionsDB.subTab4) or 1 }
+    if activeTab > #TAB_NAMES then activeTab = 1 end
     local tabW = math.floor((W - PAD * 2) / #TAB_NAMES)
     local tabs = {}
     for t, name in ipairs(TAB_NAMES) do
@@ -721,15 +768,15 @@ local function buildPanel()
     local subBar = CreateFrame("Frame", nil, panel)
     subBar:SetHeight(SEG_H + 12)
     local subs = {}
-    for t, name in ipairs(SUB_NAMES) do
+    for t, name in ipairs(SUBS[3]) do
         local b = segment(subBar, name)
         b:SetSize(110, SEG_H)
         if t == 1 then b:SetPoint("TOPLEFT", subBar, "TOPLEFT", 0, -6)
         else b:SetPoint("LEFT", subs[t - 1], "RIGHT", -1, 0) end
         b:SetScript("OnClick", function()
-            activeSub = t
+            activeSubs[activeTab] = t
             ProvisionsDB = ProvisionsDB or {}
-            ProvisionsDB.subTab = t
+            if activeTab == 3 then ProvisionsDB.subTab = t else ProvisionsDB.subTab4 = t end
             panelRefresh()
         end)
         subs[t] = b
@@ -871,14 +918,33 @@ local function buildPanel()
             sub:SetText(opt.desc)
             self:SetHeight(8 + SEG_H + 8 + 16 + 6 + sub:GetStringHeight() + 10)
         end
+        elseif opt.kind == "raidPreset" then
+        -- one button per preset
+        local presets = (NS.raid and NS.raid.presets()) or {}
+        local btnW = 120
+        for c, pr in ipairs(presets) do
+            local b = segment(row, pr.short or pr.name)
+            b:SetSize(btnW, SEG_H)
+            b:SetPoint("TOPRIGHT", row, "TOPRIGHT", -(c - 1) * (btnW + 6), -8)
+            b:SetActive(false)
+            b:SetScript("OnClick", function() if NS.raid then NS.raid.askPreset(pr.key) end end)
+        end
+        function row:Refresh()
+            sub:SetText(opt.desc)
+            self:SetHeight(math.max(ROW_H, 8 + SEG_H + 6 + sub:GetStringHeight() + 10))
+        end
         elseif opt.kind == "barItems" then
         -- one toggle chip per item type
-        local chipW = math.floor((W - PAD * 2) / #BAR_ITEMS)
+        local perRow = (#BAR_ITEMS > 6) and math.ceil(#BAR_ITEMS / 2) or #BAR_ITEMS -- two rows when crowded
+        local chipRows = math.ceil(#BAR_ITEMS / perRow)
+        local chipW = math.floor((W - PAD * 2) / perRow)
+        local chipsH = chipRows * SEG_H + (chipRows - 1) * 4
         local chips = {}
         for c, it in ipairs(BAR_ITEMS) do
             local b = segment(row, it[2])
             b:SetSize(chipW + 1, SEG_H)
-            b:SetPoint("TOPLEFT", row, "TOPLEFT", (c - 1) * chipW, -(8 + SEG_H + 6))
+            local col, line = (c - 1) % perRow, math.floor((c - 1) / perRow)
+            b:SetPoint("TOPLEFT", row, "TOPLEFT", col * chipW, -(8 + SEG_H + 6 + line * (SEG_H + 4)))
             b:SetScript("OnClick", function()
                 if not barChangeAllowed() then return end
                 local items = barItems()
@@ -889,17 +955,25 @@ local function buildPanel()
             chips[c] = b
         end
         sub:ClearAllPoints()
-        sub:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -(8 + SEG_H + 6 + SEG_H + 6))
+        sub:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -(8 + SEG_H + 6 + chipsH + 6))
         function row:Refresh()
             local items = barItems()
             for c, it in ipairs(BAR_ITEMS) do chips[c]:SetActive(items[it[1]] and true or false) end
             sub:SetText(opt.desc)
-            self:SetHeight(8 + SEG_H + 6 + SEG_H + 6 + sub:GetStringHeight() + 10)
+            self:SetHeight(8 + SEG_H + 6 + chipsH + 6 + sub:GetStringHeight() + 10)
         end
         else
         -- two-way switch: item order for item rows, combined/separate for the food & drink mode row
         local choices, get, set
-        if opt.kind == "barClickable" then
+        if opt.kind and (opt.kind:find("^raid") or opt.kind:find("^stims")) then
+            local what = opt.kind:gsub("^raid", ""):gsub("^stims", "")
+            if what == "Show" then choices = { { "Always", "always" }, { "In raid", "raid" }, { "Hide", "hide" } }
+            elseif what == "Glow" then choices = { { "Both", "both" }, { "Missing", "missing" }, { "Active", "active" }, { "Off", "off" } }
+            elseif what == "Lock" then choices = { { "Locked", true }, { "Unlocked", false } }
+            else choices = { { "Right", "RIGHT" }, { "Left", "LEFT" }, { "Up", "UP" }, { "Down", "DOWN" } } end
+            get = function() return NS.raid and NS.raid.get(opt.kind) end
+            set = function(v) if NS.raid then NS.raid.set(opt.kind, v) end end
+        elseif opt.kind == "barClickable" then
             choices = { { "On", true }, { "Off", false } }
             get = function() return barDB().clickable and true or false end
             set = function(v)
@@ -918,6 +992,10 @@ local function buildPanel()
             choices = { { "Locked", true }, { "Unlocked", false } }
             get = function() return barDB().locked end
             set = function(v) if barChangeAllowed() then barDB().locked = v; safeBarRefresh() end end
+        elseif opt.kind == "barToggles" then
+            choices = { { "On", true }, { "Off", false } }
+            get = function() return barDB().toggles end
+            set = function(v) barDB().toggles = v; safeBarRefresh() end
         elseif opt.kind == "barClick" then
             choices = { { "On", true }, { "Off", false } }
             get = function() return barDB().clickThrough end
@@ -1015,13 +1093,15 @@ local function buildPanel()
     -- size the window to its content (text heights depend on the font in use)
     local function layoutRows()
         local last = nil
-        local paged = (activeTab == SUB_TAB)
+        local names = SUBS[activeTab]
+        local paged = names ~= nil
+        local activeSub = activeSubs[activeTab]
         subBar:SetShown(paged)
         if paged then
             subBar:ClearAllPoints()
             subBar:SetPoint("TOPLEFT", div, "BOTTOMLEFT", 0, -2)
             subBar:SetPoint("RIGHT", panel, "RIGHT", -PAD, 0)
-            for t, b in ipairs(subs) do b:SetActive(t == activeSub) end
+            for t, b in ipairs(subs) do b.text:SetText(names[t] or ""); b:SetActive(t == activeSub) end
             last = subBar
         end
         for _, r in ipairs(panel.rows) do
@@ -1063,8 +1143,8 @@ local function buildPanel()
         layoutRows()
         local tallest = 0
         for t = 1, #TAB_NAMES do
-            if t == SUB_TAB then
-                for sub = 1, #SUB_NAMES do tallest = math.max(tallest, subBar:GetHeight() + 2 + rowsHeight(t, sub)) end
+            if SUBS[t] then
+                for sub = 1, #SUBS[t] do tallest = math.max(tallest, subBar:GetHeight() + 2 + rowsHeight(t, sub)) end
             else
                 tallest = math.max(tallest, rowsHeight(t))
             end
@@ -1082,6 +1162,13 @@ local function buildPanel()
         if not panel:IsShown() then return end
         for _, r in ipairs(panel.rows) do r:Refresh() end
         layout()
+    end
+    panel.selectTab = function(t, sub)
+        activeTab = t
+        if sub and SUBS[t] then activeSubs[t] = sub end
+        ProvisionsDB = ProvisionsDB or {}
+        ProvisionsDB.tab = t
+        panelRefresh()
     end
     panel:SetScript("OnShow", function()
         layout(); panelRefresh()
@@ -1201,6 +1288,40 @@ local function buildBar()
     bar.dragLabel:SetPoint("RIGHT", bar.gearBtn, "LEFT", -6, 0) -- label, gear, lock in one row
 
     bar.startMove, bar.stopMove = startMove, stopMove
+
+    -- two small buttons at the growing end: show/hide the raid bar and the raid stims bar
+    bar.toggles = CreateFrame("Frame", nil, bar)
+    bar.toggles.buttons = {}
+    local TOGGLES = { { "raid", 13510, "Raid bar" }, { "stims", 13457, "Raid stims bar" } } -- Flask of the Titans, Gr. Fire Protection
+    for i, t in ipairs(TOGGLES) do
+        local key, iconItem, name = t[1], t[2], t[3]
+        local b = CreateFrame("Button", nil, bar.toggles)
+        b.tex = b:CreateTexture(nil, "ARTWORK")
+        b.tex:SetPoint("TOPLEFT", 1, -1); b.tex:SetPoint("BOTTOMRIGHT", -1, 1)
+        b.tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        b.tex:SetTexture(itemIcon(iconItem) or MACRO_ICON)
+        b.edges = addEdges(b, 1, 1, 1, 0.25, "OVERLAY")
+        function b:Refresh()
+            local shown = NS.raid and NS.raid.isShown(key)
+            self.tex:SetDesaturated(not shown)
+            self.tex:SetAlpha(shown and 1 or 0.45)
+            self.on = shown
+        end
+        b:SetScript("OnEnter", function(self)
+            self.edges:SetColor(ar, ag, ab, 1)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:AddLine(name .. (self.on and ": shown" or ": hidden"))
+            GameTooltip:AddLine("Click to " .. (self.on and "hide" or "show") .. " it", 0.7, 0.7, 0.7)
+            GameTooltip:Show()
+        end)
+        b:SetScript("OnLeave", function(self) self.edges:SetColor(1, 1, 1, 0.25); GameTooltip:Hide() end)
+        b:SetScript("OnClick", function(self)
+            if NS.raid then NS.raid.toggleShown(key) end
+            self:Refresh()
+            if GameTooltip:IsOwned(self) then self:GetScript("OnEnter")(self) end
+        end)
+        bar.toggles.buttons[i] = b
+    end
     bar.slots = {}
     for i, it in ipairs(BAR_ITEMS) do bar.slots[i] = makeSlot(i, it, false) end
 end
@@ -1331,7 +1452,7 @@ barRefresh = function()
         local p = lastPick[key]
         local count = (p and getCount and getCount(p.id)) or 0
         -- only what you actually have, only the types you picked, no mana items without mana
-        local show = items[key] and count > 0 and (mana or (key ~= "drink" and key ~= "mpot"))
+        local show = items[key] and count > 0 and (mana or (key ~= "drink" and key ~= "mpot" and key ~= "rune"))
         if show then
             slot:ClearAllPoints()
             local off = BAR_GAP + n * (size + BAR_GAP) -- first icon sits at the pinned edge
@@ -1361,6 +1482,29 @@ barRefresh = function()
     bar.lockBtn:SetShown(unlocked)
     bar.gearBtn:SetShown(unlocked)
     if n == 0 and not unlocked then bar:Hide(); return end
+    -- raid bar buttons: a small pair just outside the growing end, stacked across the bar
+    local tg = bar.toggles
+    if tg then
+        tg:SetShown(db.toggles and NS.raid ~= nil)
+        if db.toggles then
+            local half = math.max(12, math.floor((size + BAR_GAP * 2 - 2) / 2))
+            local vert = (grow == "UP" or grow == "DOWN")
+            tg:ClearAllPoints()
+            if vert then tg:SetSize(half * 2 + 2, half) else tg:SetSize(half, half * 2 + 2) end
+            if grow == "LEFT" then tg:SetPoint("RIGHT", bar, "LEFT", -2, 0)
+            elseif grow == "UP" then tg:SetPoint("BOTTOM", bar, "TOP", 0, 2)
+            elseif grow == "DOWN" then tg:SetPoint("TOP", bar, "BOTTOM", 0, -2)
+            else tg:SetPoint("LEFT", bar, "RIGHT", 2, 0) end
+            for i, b in ipairs(tg.buttons) do
+                b:SetSize(half, half)
+                b:ClearAllPoints()
+                if vert then b:SetPoint("LEFT", tg, "LEFT", (i - 1) * (half + 2), 0)
+                else b:SetPoint("TOP", tg, "TOP", 0, -(i - 1) * (half + 2)) end
+                b:EnableMouse(true)
+                b:Refresh()
+            end
+        end
+    end
     local length = BAR_GAP + math.max(n, 1) * (size + BAR_GAP)
     if grow == "UP" or grow == "DOWN" then bar:SetSize(size + BAR_GAP * 2, length)
     else bar:SetSize(length, size + BAR_GAP * 2) end
@@ -1389,7 +1533,7 @@ end
 -- Lists every usable item of one type; picking one makes it the choice for the bar and macro
 -- until you run out of it. "Auto" goes back to strongest/weakest.
 local flyout
-local GROUP_OF = { food = "food", drink = "food", hpot = "potions", mpot = "potions", bandage = "bandage", stone = "healthstone" }
+local GROUP_OF = { food = "food", drink = "food", hpot = "potions", mpot = "potions", bandage = "bandage", stone = "healthstone", rune = "rune", bufffood = "bufffood" }
 
 local function setOverride(key, id)
     ProvisionsCharDB = ProvisionsCharDB or {}
@@ -1612,14 +1756,15 @@ local function resetBar()
     local db = barDB()
     db.point, db.pos = nil, nil
     if bar then bar:ClearAllPoints(); bar:SetPoint("CENTER", UIParent, "CENTER", 0, 0) end
-    print("|cff33ff99Provisions|r item bar moved back to the centre of the screen")
+    if NS.raid then NS.raid.resetPosition() end
+    print("|cff33ff99Provisions|r item bar, raid bar and raid stims bar moved back to the centre of the screen")
 end
 
 
 ---------------------------------------------------------------- shared vs per-character settings
 -- ProvisionsDB (all characters): options, item bar look/position, settings tab, minimap button.
 -- ProvisionsCharDB (this character): item order, which items the bar shows, right-click picks.
-local SHARED_KEYS = { "splitFood", "conjuredFirst", "skipBuffFood", "tab", "subTab" }
+local SHARED_KEYS = { "splitFood", "conjuredFirst", "skipBuffFood", "tab", "subTab", "subTab4" }
 local function deepCopy(t)
     if type(t) ~= "table" then return t end
     local c = {}
@@ -1700,7 +1845,7 @@ end)
 
 ---------------------------------------------------------------- factory reset (shared + this character)
 StaticPopupDialogs["PROVISIONS_RESET"] = {
-    text = "Reset Provisions to the first-install defaults?\n\nOptions and the item bar (position, size, lock...) are shared, so they reset for ALL characters. Item order, bar items and right-click picks reset for this character only.\n\nThis reloads your UI.",
+    text = "Reset Provisions to the first-install defaults?\n\nOptions and the item bar (position, size, lock...) are shared, so they reset for ALL characters. Item order, bar items, right-click picks and the raid bar and raid stims lists reset for this character only.\n\nThis reloads your UI.",
     button1 = "Reset",
     button2 = "Cancel",
     OnAccept = function()
@@ -1720,6 +1865,11 @@ SLASH_PROVISIONS2 = "/provisions"
 SLASH_PROVISIONS3 = "/eatdrink" -- old command still works
 SlashCmdList.PROVISIONS = function(input)
     local P = "|cff33ff99Provisions|r "
+    local first, raidArgs = (input or ""):match("^%s*(%S*)%s*(.-)%s*$")
+    if first and (first:lower() == "raid" or first:lower() == "stims") then
+        if NS.raid then NS.raid.slash(first:lower(), raidArgs) end
+        return
+    end
     local cmd, group, mode = (input or ""):lower():match("^(%S*)%s*(%S*)%s*(%S*)")
     if cmd == "" then togglePanel(); return end
     if cmd == "minimap" then toggleMinimap(); return end
@@ -1762,17 +1912,17 @@ SlashCmdList.PROVISIONS = function(input)
         return
     end
     if cmd == "order" then
-        local valid = { food = true, potions = true, bandage = true, healthstone = true }
+        local valid = { food = true, potions = true, bandage = true, healthstone = true, rune = true, bufffood = true }
         if valid[group] and (mode == "high" or mode == "low") then
             setOrder(group, mode)
             print(P .. group .. ": " .. (mode == "low" and "weakest first" or "strongest first"))
         else
-            print(P .. "usage: /prov order <food|potions|bandage|healthstone> <high|low>")
+            print(P .. "usage: /prov order <food|potions|bandage|healthstone|rune|bufffood> <high|low>")
         end
         print(P .. "current order: food " .. getOrder("food") .. ", potions " .. getOrder("potions")
-            .. ", bandage " .. getOrder("bandage") .. ", healthstone " .. getOrder("healthstone"))
+            .. ", bandage " .. getOrder("bandage") .. ", healthstone " .. getOrder("healthstone") .. ", rune " .. getOrder("rune") .. ", buff food " .. getOrder("bufffood"))
     elseif cmd ~= "info" then
-        print(P .. "/prov = settings window, /prov info = current picks, /prov minimap = show/hide button, /prov resetbar = move the item bar back to the centre, /prov reset = factory reset (shared settings + this character), /prov order <group> <high|low>")
+        print(P .. "/prov = settings window, /prov info = current picks, /prov minimap = show/hide button, /prov raid, /prov stims = raid bar and raid stims commands, /prov resetbar = move all bars back to the centre, /prov reset = factory reset (shared settings + this character), /prov order <group> <high|low>")
         return
     end
     update()
@@ -1787,4 +1937,26 @@ SlashCmdList.PROVISIONS = function(input)
     print(P .. "mana potion: " .. describe(lastPick.mpot, "mana"))
     print(P .. "bandage: " .. describe(lastPick.bandage, "healing"))
     print(P .. "healthstone: " .. describe(lastPick.stone, "health"))
+    print(P .. "rune: " .. describe(lastPick.rune, "mana"))
+    print(P .. "buff food: " .. describe(lastPick.bufffood, "health"))
+end
+
+---------------------------------------------------------------- shared with ProvisionsRaid.lua
+NS.print = chatOut
+NS.accent = accent
+NS.fontPath = fontPath
+NS.addEdges = addEdges
+NS.barDB = barDB
+NS.panelRefresh = function() if panelRefresh then panelRefresh() end end
+NS.openSettings = function(tab, sub)
+    if tab and not panel then
+        ProvisionsDB = ProvisionsDB or {}
+        ProvisionsDB.tab = tab
+        if tab == 4 and sub then ProvisionsDB.subTab4 = sub end
+    end
+    if not (panel and panel:IsShown()) then togglePanel() end
+    if tab and panel and panel.selectTab then panel.selectTab(tab, sub) end
+end
+NS.refreshBarToggles = function()
+    if bar and bar.toggles then for _, b in ipairs(bar.toggles.buttons) do b:Refresh() end end
 end

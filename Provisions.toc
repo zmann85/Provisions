@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: Provisions
-## Notes: One-button macros and an item bar for your best (or weakest) food, drink, potions, bandages and healthstones.
+## Notes: One-button macros and an item bar for your best (or weakest) food, drink, potions, bandages, healthstones, runes and buff food, plus raid bars for your own raid consumables.
 ## Author: Ghaan
 ## Version: @project-version@
 ## IconTexture: Interface\Icons\INV_Misc_Food_11
@@ -15,3 +15,4 @@ libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
 ProvisionsItems.lua
 Provisions.lua
+ProvisionsRaid.lua

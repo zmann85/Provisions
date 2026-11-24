@@ -1,4 +1,4 @@
-<p style="text-align:center;"><strong><span style="font-size:18px;">One button to eat, drink, potion or bandage, always with the best item in your bags.</span></strong></p>
+<p style="text-align:center;"><strong><span style="font-size:18px;">One button to eat, drink, potion or bandage, always with the best item in your bags. Plus raid bars for your flasks, elixirs and stims.</span></strong></p>
 
 <p>Provisions keeps a few general macros pointed at the right consumable. When you loot new food, level up or run out of a stack, <strong>the buttons update themselves</strong>. Put them on your bars once and never think about it again.</p>
 
@@ -25,6 +25,8 @@
 <tr><td><strong>ManaPot</strong></td><td>Best mana potion</td></tr>
 <tr><td><strong>Bandage</strong></td><td>Best bandage your First Aid skill allows</td></tr>
 <tr><td><strong>Healthstone</strong></td><td>Best healthstone</td></tr>
+<tr><td><strong>Rune</strong></td><td>Demonic Rune or Dark Rune (characters with mana)</td></tr>
+<tr><td><strong>BuffFood</strong></td><td>Best Well Fed dish: its stat buff, plus +5% experience from kills in WoW Forever</td></tr>
 </tbody>
 </table>
 
@@ -44,9 +46,26 @@
 <li><strong>Click</strong> an icon to use the item, <strong>right-click</strong> to pick a specific item for that slot</li>
 <li>Choose which item types appear, plus icon size and grow direction</li>
 <li>Lock it or make it click-through. <strong>Alt + click</strong> unlocks it any time</li>
+<li>Two small buttons at its end show or hide the raid bars</li>
 </ul>
 <p style="text-align:center;"><img src="https://raw.githubusercontent.com/zmann85/Provisions/main/media/item-bar.png" alt="Item bar with the right-click list open" width="502"></p>
 <p style="text-align:center;"><em>The item bar, with the right-click list open to pick a specific mushroom.</em></p>
+
+<hr>
+
+<h2>Raid bars</h2>
+<p>Two more bars for your own raid consumables, a separate list for each character:</p>
+<ul>
+<li><strong>Raid bar</strong>: lasting buffs like flasks, elixirs, buff food, juju, world buffs, scrolls, weapon oils and stones</li>
+<li><strong>Raid stims bar</strong>: short-use items for certain fights, like protection potions, Free Action and Stoneshield</li>
+</ul>
+<ul>
+<li><strong>Drag</strong> an item from your bags onto a bar to add it, <strong>click</strong> to use it. Oils, stones and poisons go straight onto your weapon</li>
+<li>Items you've run out of stay greyed out with 0, as a restock reminder</li>
+<li>An icon <strong>pulses orange</strong> when you carry the item but its buff isn't on you (in raids), and gets a <strong>green frame</strong> with the time left while the buff is up</li>
+<li><strong>Right-click</strong> an icon to move it, remove it or switch its glow. <strong>Presets</strong> fill both bars at once, starting with Protection Paladin</li>
+<li>Works in any game language: the buff is read from the game, not from tooltip text</li>
+</ul>
 
 <hr>
 
@@ -56,8 +75,9 @@
 <li><strong>Item order</strong>: your buttons to drag onto your bars, and strongest or weakest first per group</li>
 <li><strong>Options</strong>: one or two food &amp; drink buttons, conjured first, skip buff food</li>
 <li><strong>Item bar</strong>: what the bar shows, how it looks and how it behaves</li>
+<li><strong>Raid bar</strong>: a page each for the raid bar and the raid stims bar, plus presets</li>
 </ul>
-<p>Options and the bar layout are shared by all your characters. Item order, bar items and right-click picks are saved per character.</p>
+<p>Options and the bar layout are shared by all your characters. Item order, bar items, right-click picks and the raid bar lists are saved per character.</p>
 <p style="text-align:center;"><img src="https://raw.githubusercontent.com/zmann85/Provisions/main/media/settings-appearance.png" alt="Item bar settings: appearance" width="360"> <img src="https://raw.githubusercontent.com/zmann85/Provisions/main/media/settings-behaviour.png" alt="Item bar settings: behaviour" width="350"></p>
 
 <h3>Commands</h3>
@@ -65,7 +85,8 @@
 <tbody>
 <tr><td><code>/prov</code></td><td>Open the settings window</td></tr>
 <tr><td><code>/prov info</code></td><td>Show what each button currently uses</td></tr>
-<tr><td><code>/prov resetbar</code></td><td>Move the bar back to the centre</td></tr>
+<tr><td><code>/prov raid</code>, <code>/prov stims</code></td><td>Raid bar and raid stims commands (add, list, clear, preset)</td></tr>
+<tr><td><code>/prov resetbar</code></td><td>Move all bars back to the centre</td></tr>
 <tr><td><code>/prov minimap</code></td><td>Show or hide the minimap button</td></tr>
 <tr><td><code>/prov reset</code></td><td>Factory reset</td></tr>
 </tbody>
@@ -74,4 +95,4 @@
 <hr>
 
 <h2>Lightweight</h2>
-<p>It only scans when your bags change and never reads the combat log. Nothing it does in combat can get blocked.</p>
+<p>It only scans when your bags change and never reads the combat log. Nothing it does in combat can get blocked, and it doesn't touch buff data the game keeps secret during fights.</p>

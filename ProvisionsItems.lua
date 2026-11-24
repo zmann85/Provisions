@@ -1,12 +1,14 @@
 -- Provisions: what the food, drink, potions, bandages and healthstones are, read once from their English tooltips
 -- on the WoW Forever beta (2026-10-23), so Provisions knows them in any client language and without waiting for
 -- tooltips. "\n<itemID>=<kind>,<health>,<mana>,<flags>,<First Aid>,<level>": kind f food/drink, p potion,
--- b bandage, s healthstone; flags c conjured, w Well Fed; First Aid: the skill a bandage needs; level: the level
+-- b bandage, s healthstone, r rune (mana for health); flags c conjured, w Well Fed; First Aid: the skill a bandage needs; level: the level
 -- it needs. An item that isn't here is read from its tooltip (English text).
 local _, NS = ...
 NS.ITEMS = [==[
 
 117=f,58,0,,,1
+12662=r,0,1500,,,0
+20520=r,0,1500,,,0
 118=p,90,0,,,1
 159=f,0,151,,,1
 414=f,234,0,,,5
